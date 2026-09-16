@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 闪电形 "Z"：呼应 ZCode 远程控制的快速接入 -->
+    <path
+        android:fillColor="#7EB8FF"
+        android:pathData="M61,28 L41,58 L53,58 L47,80 L69,48 L56,48 Z" />
+</vector>
