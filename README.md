@@ -55,6 +55,24 @@ ui/       Compose M3（设备列表 / 扫码 / 粘贴添加 / WebView 远程页�
 已验证：HTTP/JS 资源全部 200、React 正常挂载、DOM 与桌面浏览器完全一致
 （可通过 `chrome://inspect` 远程调试复核）。真机 GPU 不受此影响。
 
+## 正式签名构建
+
+仓库不含签名密钥。构建脚本按「有无 `keystore.properties`」自动切换：
+存在则 release 包用该密钥签名，否则回退 debug 签名（克隆后可直接出包）。
+
+在本机配置：
+
+```properties
+# keystore.properties（已 gitignore，放在仓库根目录）
+storeFile=/absolute/path/to/zbox-release.jks
+storePassword=...
+keyAlias=zbox
+keyPassword=...
+```
+
+密钥库生成：`keytool -genkeypair -v -keystore zbox-release.jks -alias zbox -keyalg RSA -keysize 2048 -validity 10950`。
+⚠️ 密钥库与口令请异地备份——丢失后无法对已有用户发布签名更新。
+
 ## 后续（M3 候选）
 
 - 桌面小部件（Glance）、best-effort 在线探测、iOS（Compose Multiplatform 或
