@@ -50,7 +50,7 @@ class RemoteLinkParserTest {
 
     @Test
     fun `missing sid is invalid`() {
-        val url = realUrl.replaceFirst("sid=d_FakeSidForUnitTests&", "")
+        val url = realUrl.replaceFirst(Regex("sid=[^&]+&"), "")
         val result = parser.parse(url)
         assertTrue(result is RemoteLinkParser.Result.Invalid)
         assertTrue((result as RemoteLinkParser.Result.Invalid).reason.contains("sid"))
