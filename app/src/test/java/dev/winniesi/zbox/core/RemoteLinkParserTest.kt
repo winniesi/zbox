@@ -8,7 +8,7 @@ class RemoteLinkParserTest {
 
     private val parser = RemoteLinkParser()
 
-    // 真实形状的链接（hash 含 %2F 与 %3D 编码）
+    // 真实形状的链接（hash 含 %2F 与 %3D 编码），参数为合成值
     private val realUrl =
         "https://zcode.z.ai/remote/v4?sid=d_FakeSidForUnitTests" +
             "&hash=FakeHashA%2FFakeHashB%2BFakeHashC%3D" +
