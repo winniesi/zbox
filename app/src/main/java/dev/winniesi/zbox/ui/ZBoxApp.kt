@@ -4,7 +4,6 @@ import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -18,10 +17,6 @@ import dev.winniesi.zbox.ui.devices.DevicesScreen
 import dev.winniesi.zbox.ui.remote.RemoteScreen
 import dev.winniesi.zbox.ui.scan.ScanScreen
 import kotlinx.coroutines.launch
-
-val LocalAppContainer = staticCompositionLocalOf<AppContainer> {
-    error("AppContainer not provided")
-}
 
 object NavRoutes {
     const val DEVICES = "devices"

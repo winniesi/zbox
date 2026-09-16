@@ -32,7 +32,7 @@ class MainActivity : ComponentActivity() {
 
     /** zcode:// 深链入口（扫码绑定 / 快捷方式直达）。 */
     private fun handleIntent(intent: Intent?) {
-        val data = intent?.dataString() ?: return
+        val data = intent?.dataString ?: return
         val link = AppLinks.parse(data) ?: return
         container.pendingAppLink.value = link
     }

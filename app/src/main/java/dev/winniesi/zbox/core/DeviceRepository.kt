@@ -28,7 +28,7 @@ class DeviceRepository(
     val devices: StateFlow<List<DeviceRecord>?> = _devices.asStateFlow()
 
     suspend fun refresh(): List<DeviceRecord> = mutex.withLock {
-        val loaded = _devices ?: store.load().also { _devices.value = it }
+        val loaded = _devices.value ?: store.load().also { _devices.value = it }
         loaded
     }
 
@@ -38,7 +38,7 @@ class DeviceRepository(
      */
     suspend fun addOrUpdateFromLink(link: RemoteLink, displayName: String? = null): AddResult =
         mutex.withLock {
-            val current = _devices ?: store.load().also { _devices.value = it }
+            val current = _devices.value ?: store.load().also { _devices.value = it }
             val existing = current.firstOrNull { it.mid == link.mid }
             val ts = now()
             val record = if (existing == null) {
@@ -52,6 +52,7 @@ class DeviceRepository(
                     issuedAt = link.t,
                     appVersion = link.appVersion,
                     addedAt = ts,
+                    customName = displayName != null,
                 )
             } else {
                 existing.copy(
@@ -77,7 +78,7 @@ class DeviceRepository(
         }
 
     suspend fun rename(mid: String, newName: String): Unit = mutex.withLock {
-        val current = _devices ?: store.load().also { _devices.value = it }
+        val current = _devices.value ?: store.load().also { _devices.value = it }
         val next = current.map {
             if (it.mid == mid && newName.isNotBlank()) it.copy(name = newName.trim(), customName = true) else it
         }
@@ -86,23 +87,25 @@ class DeviceRepository(
     }
 
     suspend fun remove(mid: String): Unit = mutex.withLock {
-        val current = _devices ?: store.load().also { _devices.value = it }
+        val current = _devices.value ?: store.load().also { _devices.value = it }
         val next = current.filterNot { it.mid == mid }
         store.save(next)
         _devices.value = next
     }
 
     suspend fun markOpened(mid: String): Unit = mutex.withLock {
-        val current = _devices ?: store.load().also { _devices.value = it }
+        val current = _devices.value ?: store.load().also { cached -> _devices.value = cached }
         val ts = now()
-        val next = current.map { if (it.mid == mid) it.copy(lastOpenedAt = ts) else it }
+        val next = current.map { record ->
+            if (record.mid == mid) record.copy(lastOpenedAt = ts) else record
+        }
         store.save(next)
         _devices.value = next
     }
 
     /** 是否已存在该设备（用于添加页提示"将更新钥匙"）。 */
     suspend fun exists(mid: String): Boolean = mutex.withLock {
-        val current = _devices ?: store.load().also { _devices.value = it }
+        val current = _devices.value ?: store.load().also { _devices.value = it }
         current.any { it.mid == mid }
     }
 

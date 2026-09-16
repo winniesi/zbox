@@ -51,11 +51,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import dev.winniesi.zbox.core.Freshness
 import dev.winniesi.zbox.core.relativeTime
 import dev.winniesi.zbox.di.LocalAppContainer
-
 /**
  * M1 远程控制页：用系统 WebView 加载官方远程页面，协议兼容性完全交给官方前端。
  * 失败时按原因分类给出引导（钥匙失效 → 重新扫码；网络类 → 重试 / 检查桌面端在线）。
@@ -105,6 +105,7 @@ fun RemoteScreen(
             else -> RemoteWebView(
                 mid = record.mid,
                 onRescan = onRescan,
+                onBack = onBack,
                 modifier = Modifier.fillMaxSize().padding(padding),
             )
         }
@@ -121,6 +122,7 @@ private sealed interface RemoteUiState {
 private fun RemoteWebView(
     mid: String,
     onRescan: (String) -> Unit,
+    onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val container = LocalAppContainer.current
