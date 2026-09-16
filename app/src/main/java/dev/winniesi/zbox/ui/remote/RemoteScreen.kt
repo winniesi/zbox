@@ -56,6 +56,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import dev.winniesi.zbox.core.Freshness
 import dev.winniesi.zbox.core.relativeTime
 import dev.winniesi.zbox.di.LocalAppContainer
+import dev.winniesi.zbox.platform.DeviceWebViewFactory
 /**
  * M1 远程控制页：用系统 WebView 加载官方远程页面，协议兼容性完全交给官方前端。
  * 失败时按原因分类给出引导（钥匙失效 → 重新扫码；网络类 → 重试 / 检查桌面端在线）。
@@ -141,6 +142,7 @@ private fun RemoteWebView(
         val url = repository.plainUrl(record)
         createWebView(
             context = context,
+            mid = record.mid,
             deviceHost = record.host,
             onState = { uiState = it },
         ).apply { loadUrl(url) }
@@ -186,6 +188,7 @@ private class UiTracker {
 @SuppressLint("SetJavaScriptEnabled")
 private fun createWebView(
     context: Context,
+    mid: String,
     deviceHost: String,
     onState: (RemoteUiState) -> Unit,
 ): WebView {
@@ -194,7 +197,8 @@ private fun createWebView(
         tracker.last = state
         onState(state)
     }
-    return WebView(context).apply {
+    // M2：每设备独立 Profile，cookie/存储按设备隔离
+    return DeviceWebViewFactory.create(context, mid).apply {
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
         settings.useWideViewPort = true
