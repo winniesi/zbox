@@ -1,0 +1,86 @@
+package dev.winniesi.zbox
+
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performScrollTo
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import dev.winniesi.zbox.core.AppLinks
+import dev.winniesi.zbox.core.RemoteLink
+import dev.winniesi.zbox.di.AppContainer
+import kotlinx.coroutines.runBlocking
+import org.junit.After
+import org.junit.Before
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+
+/** App 启动、深链路由、远程页导航的端到端 UI 测试（模拟器运行）。 */
+@RunWith(AndroidJUnit4::class)
+class MainActivityUiTest {
+
+    @get:Rule
+    val composeRule = createAndroidComposeRule<MainActivity>()
+
+    private val container: AppContainer
+        get() = composeRule.activity.application.let { it as ZBoxApplication }.container
+
+    private val fakeLink = RemoteLink(
+        scheme = "https",
+        host = "zcode.z.ai",
+        path = "/remote/v4",
+        sid = "sid-e2e",
+        hash = "hash-e2e",
+        t = System.currentTimeMillis(),
+        mid = "e2emid0001",
+        name = "E2E设备",
+        appVersion = "3.11.2",
+    )
+
+    @Before
+    fun resetDevices() {
+        composeRule.activityRule.scenario.onActivity { }
+        runBlocking {
+            container.repository.refresh()
+            container.repository.devices.value?.forEach { container.repository.remove(it.mid) }
+        }
+    }
+
+    @After
+    fun cleanup() {
+        runBlocking { container.repository.remove(fakeLink.mid) }
+    }
+
+    @Test
+    fun emptyStateIsShownWhenNoDevices() {
+        composeRule.onNodeWithText("还没有设备").assertIsDisplayed()
+        composeRule.onNodeWithText("ZBox 设备").assertIsDisplayed()
+    }
+
+    @Test
+    fun addDeepLinkShowsParsedPreview() {
+        val url = fakeLink.toUrlString()
+        composeRule.activityRule.scenario.onActivity { activity ->
+            (activity as MainActivity).consumeDeepLink(AppLinks.buildAddUrl(url))
+        }
+        composeRule.waitUntil(5_000) {
+            composeRule.onAllNodesWithText("链接解析结果").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithText("链接解析结果").assertIsDisplayed()
+        composeRule.onNodeWithText("zcode.z.ai").assertIsDisplayed()
+        composeRule.onNodeWithText("保存设备").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun openDeepLinkNavigatesToRemoteScreen() {
+        runBlocking { container.repository.addOrUpdateFromLink(fakeLink) }
+        composeRule.activityRule.scenario.onActivity { activity ->
+            (activity as MainActivity).consumeDeepLink(AppLinks.buildOpenUrl(fakeLink.mid))
+        }
+        composeRule.waitUntil(10_000) {
+            composeRule.onAllNodesWithText("E2E设备").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithText("E2E设备").assertIsDisplayed()
+    }
+}

@@ -7,7 +7,10 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Environment
+import android.util.Log
+import android.webkit.ConsoleMessage
 import android.webkit.CookieManager
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -203,6 +206,8 @@ private fun createWebView(
         settings.domStorageEnabled = true
         settings.useWideViewPort = true
         settings.loadWithOverviewMode = true
+        // 允许 chrome://inspect 远程调试排查页面问题（内部工具，常开）
+        WebView.setWebContentsDebuggingEnabled(true)
 
         webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(
@@ -224,10 +229,12 @@ private fun createWebView(
             }
 
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                Log.i(TAG, "page started: $url")
                 update(RemoteUiState.Loading)
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
+                Log.i(TAG, "page finished: $url")
                 if (tracker.last !is RemoteUiState.Failed) update(RemoteUiState.Loaded)
             }
 
@@ -236,6 +243,10 @@ private fun createWebView(
                 request: WebResourceRequest,
                 error: WebResourceError,
             ) {
+                Log.w(
+                    TAG,
+                    "error ${error.errorCode} ${error.description} for ${request.url}",
+                )
                 if (request.isForMainFrame) {
                     update(
                         RemoteUiState.Failed(
@@ -250,9 +261,21 @@ private fun createWebView(
                 request: WebResourceRequest,
                 response: WebResourceResponse,
             ) {
+                Log.w(TAG, "http ${response.statusCode} for ${request.url}")
                 if (request.isForMainFrame) {
                     update(RemoteUiState.Failed(httpFailureOf(response.statusCode)))
                 }
+            }
+        }
+
+        webChromeClient = object : WebChromeClient() {
+            override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
+                Log.i(
+                    TAG,
+                    "[js:${consoleMessage.messageLevel()}] ${consoleMessage.message()} " +
+                        "(${consoleMessage.sourceId()}:${consoleMessage.lineNumber()})",
+                )
+                return true
             }
         }
 
@@ -295,6 +318,8 @@ private fun fileNameOf(link: String, contentDisposition: String?): String {
     }
     return Uri.parse(link).lastPathSegment ?: "download"
 }
+
+private const val TAG = "ZBoxWebView"
 
 @Composable
 private fun FailureOverlay(

@@ -5,7 +5,9 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.CompositionLocalProvider
 import dev.winniesi.zbox.core.AppLinks
+import dev.winniesi.zbox.di.LocalAppContainer
 import dev.winniesi.zbox.ui.ZBoxApp
 import dev.winniesi.zbox.ui.theme.ZBoxTheme
 
@@ -19,7 +21,9 @@ class MainActivity : ComponentActivity() {
         handleIntent(intent)
         setContent {
             ZBoxTheme {
-                ZBoxApp(container = container)
+                CompositionLocalProvider(LocalAppContainer provides container) {
+                    ZBoxApp(container = container)
+                }
             }
         }
     }
@@ -33,6 +37,12 @@ class MainActivity : ComponentActivity() {
     /** zcode:// 深链入口（扫码绑定 / 快捷方式直达）。 */
     private fun handleIntent(intent: Intent?) {
         val data = intent?.dataString ?: return
+        consumeDeepLink(data)
+    }
+
+    /** 供 UI 测试直接注入深链，绕过系统 Intent 分发。 */
+    @androidx.annotation.VisibleForTesting
+    fun consumeDeepLink(data: String) {
         val link = AppLinks.parse(data) ?: return
         container.pendingAppLink.value = link
     }
