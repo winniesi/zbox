@@ -34,8 +34,6 @@ data class DeviceRecord(
         name = null,
         appVersion = appVersion,
     )
-
-    fun freshness(nowMs: Long): Freshness = freshnessOf(issuedAtMs = issuedAt, nowMs = nowMs)
 }
 
 // ---- 持久化 DTO（DataStore 中存 JSON） ----

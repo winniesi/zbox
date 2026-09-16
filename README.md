@@ -1,7 +1,7 @@
 # ZBox — ZCode 多设备远程管理（Android）
 
 管理多台运行 ZCode 桌面端的设备：扫码 / 粘贴绑定远程控制链接，一键打开官方
-Web 远程控制页，并对链接（临时钥匙）的时效做启发式标记。
+Web 远程控制页，并显示链接（临时钥匙）的生成时间。
 
 ## 架构
 
@@ -12,7 +12,6 @@ WebView 壳 + 原生设备管理层。所有与桌面端的协议通信都发生
 ```
 core/     纯 Kotlin 业务逻辑（可 JVM 单测，不依赖 Android）
   RemoteLink        链接解析 / 重建（sid/hash/t/mid/name/app_version）
-  freshnessOf       钥匙时效启发（>24h 标记"可能已失效"，阈值常量可调）
   DeviceRepository  按 mid 去重、凭证加密落盘、customName 策略、最近使用排序
   AppLinks          zcode://device/add?url=… 与 zcode://device/open/<mid>
   DeviceWebProfiles / shortcutsFor   Profile 命名与快捷方式选取纯逻辑
@@ -30,10 +29,17 @@ ui/       Compose M3（设备列表 / 扫码 / 粘贴添加 / WebView 远程页�
 - **钥匙安全**：链接里的 hash 视为敏感凭证，Keystore 加密后落盘；
   `allowBackup=false`；App 自身无任何网络上报。
 - **深链**：`zcode://device/add?url=<编码后的远程链接>`（桌面快捷方式、扫码复用）。
-- **重新扫码更新**：列表卡片菜单 / 远程页失败引导 / 陈旧钥匙横幅 → 扫码 →
+- **钥匙没有已知的时间过期**：只有桌面端**刷新二维码**才会作废旧链接，链接
+  龄期不构成失效信号（v0.1.0 的 24h 启发式标记因此误报，已移除）。是否失效
+  以实际连接结果为准（官方页显示 AUTH_FAILED 等自带引导），App 内随时可
+  一键重新扫码。
+- **重新扫码更新**：列表卡片菜单 / 远程页失败引导 → 扫码 →
   直接更新该设备钥匙（mid 匹配校验）→ 远程页按 issuedAt 变化自动重载。
 - **失败分类**（ui/remote/WebViewFailure.kt）：401/403/410 与 WebView 认证错误 →
   「钥匙失效，重新扫码」；其余网络错误 → 「重试 / 检查桌面端在线」。
+- **单连接限制（桌面端行为）**：同一时间只允许一个控制端接入。若官方页显示
+  「已被其他设备接管 / KICKED」，关掉其他浏览器的远程页后点页面内
+  「重新连接」即可；App 切换设备时会自动销毁其他设备的 WebView。
 - **WebView 诊断**：debug 下开启 `setWebContentsDebuggingEnabled(true)`，页面
   console / 加载事件写入 logcat tag `ZBoxWebView`。
 

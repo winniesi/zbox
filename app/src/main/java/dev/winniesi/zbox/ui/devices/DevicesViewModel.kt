@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.winniesi.zbox.core.DeviceRecord
 import dev.winniesi.zbox.core.DeviceRepository
-import dev.winniesi.zbox.core.Freshness
 import dev.winniesi.zbox.core.relativeTime
 import dev.winniesi.zbox.core.sortedForDisplay
 import kotlinx.coroutines.flow.SharingStarted
@@ -17,7 +16,6 @@ import kotlinx.coroutines.launch
 /** 列表条目的展示模型。 */
 data class DeviceItem(
     val record: DeviceRecord,
-    val freshness: Freshness,
     val issuedLabel: String,
     val openedLabel: String?,
 )
@@ -33,7 +31,6 @@ class DevicesViewModel(
             sortedForDisplay(list).map { record ->
                 DeviceItem(
                     record = record,
-                    freshness = record.freshness(now()),
                     issuedLabel = relativeTime(record.issuedAt, now()),
                     openedLabel = record.lastOpenedAt?.let { relativeTime(it, now()) },
                 )

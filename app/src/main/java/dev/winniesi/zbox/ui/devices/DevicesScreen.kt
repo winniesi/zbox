@@ -54,7 +54,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.winniesi.zbox.core.DeviceRecord
-import dev.winniesi.zbox.core.Freshness
 import dev.winniesi.zbox.di.LocalAppContainer
 
 /**
@@ -277,19 +276,11 @@ private fun DeviceCard(
             )
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                when (item.freshness) {
-                    Freshness.FRESH -> Badge(
-                        text = "钥匙 ${item.issuedLabel}",
-                        container = MaterialTheme.colorScheme.primaryContainer,
-                        content = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
-
-                    Freshness.LIKELY_STALE -> Badge(
-                        text = "钥匙可能已失效（${item.issuedLabel}）",
-                        container = MaterialTheme.colorScheme.errorContainer,
-                        content = MaterialTheme.colorScheme.onErrorContainer,
-                    )
-                }
+                Badge(
+                    text = "钥匙 ${item.issuedLabel}",
+                    container = MaterialTheme.colorScheme.primaryContainer,
+                    content = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
                 item.openedLabel?.let {
                     Badge(
                         text = "上次打开 $it",

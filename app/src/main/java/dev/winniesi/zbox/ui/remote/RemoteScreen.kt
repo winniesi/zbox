@@ -56,8 +56,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import dev.winniesi.zbox.core.Freshness
-import dev.winniesi.zbox.core.relativeTime
 import dev.winniesi.zbox.di.LocalAppContainer
 import dev.winniesi.zbox.platform.DeviceWebViewFactory
 /**
@@ -137,8 +135,6 @@ private fun RemoteWebView(
 
     var uiState by remember { mutableStateOf<RemoteUiState>(RemoteUiState.Loading) }
     var reloadKey by remember { mutableStateOf(0) }
-    val nowMs = remember { System.currentTimeMillis() }
-    val stale = record.freshness(nowMs) == Freshness.LIKELY_STALE
 
     // 链接内容（issuedAt 变化 = 重新扫码更新）或"重载"动作变化时重建 WebView
     val webView = remember(mid, record.issuedAt, reloadKey) {
@@ -154,12 +150,6 @@ private fun RemoteWebView(
     Column(modifier) {
         if (uiState is RemoteUiState.Loading) {
             LinearProgressIndicator(Modifier.fillMaxWidth())
-        }
-        if (stale) {
-            StaleKeyBanner(
-                issuedLabel = relativeTime(record.issuedAt, nowMs),
-                onRescan = { onRescan(mid) },
-            )
         }
         Box(Modifier.weight(1f)) {
             AndroidView(factory = { webView }, modifier = Modifier.fillMaxSize())
@@ -374,24 +364,6 @@ private fun FailureOverlay(
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(onClick = onRescan) { Text("重新扫码更新钥匙") }
             }
-        }
-    }
-}
-
-@Composable
-private fun StaleKeyBanner(issuedLabel: String, onRescan: () -> Unit) {
-    Surface(color = MaterialTheme.colorScheme.errorContainer) {
-        Row(
-            Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                "钥匙生成于 $issuedLabel，可能已被桌面端刷新作废",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onErrorContainer,
-                modifier = Modifier.weight(1f),
-            )
-            TextButton(onClick = onRescan) { Text("重新扫码") }
         }
     }
 }
