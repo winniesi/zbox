@@ -21,8 +21,11 @@ import dev.winniesi.zbox.core.TaskEventJson
 /**
  * 远程任务监听：向官方远程页注入 document-start 脚本，包裹页面 WebSocket，
  * 对中继消息做只读深扫描，提取任务生命周期事件（task_complete / task_error /
- * task_warning / permission_request）与 usage.delta 里的模型、token 用量，
- * 经 addJavascriptInterface 回传原生层发本地通知。
+ * task_warning / permission_request / elicitation_request）与 usage.delta 里的
+ * 模型、token 用量，经 addJavascriptInterface 回传原生层发本地通知。
+ *
+ * 会提醒的事件：完成 / 出错 / 等待审批（工具权限）/ 等待回答（agent 向用户
+ * 提问）。task_warning 等其余事件只记日志，避免打扰。
  *
  * 防兼容性原则（README「不解析协议」的让步说明）：脚本对所有消息只读、
  * 深度受限、任何解析失败静默忽略；只识别已知事件类型，ZCode 升级新增
@@ -49,30 +52,35 @@ object RemoteTaskMonitor {
   window.__ZBOX_TASK_MONITOR__ = true;
   var Native = window.ZBoxNative;
   if (!Native || !Native.postTaskEvent) return;
-  var TASK_KINDS = { task_complete: 1, task_error: 1, task_warning: 1, permission_request: 1 };
+  var TASK_KINDS = {
+    task_complete: 1, task_error: 1, task_warning: 1,
+    permission_request: 1, elicitation_request: 1
+  };
   var recent = {};
   var usage = { model: '', inputTokens: 0, outputTokens: 0 };
   function send(obj) { try { Native.postTaskEvent(JSON.stringify(obj)); } catch (e) {} }
-  function scan(node, depth, wsPath) {
+  function scan(node, depth, ctx) {
     if (!node || typeof node !== 'object' || depth > 6) return;
     if (Array.isArray(node)) {
-      for (var i = 0; i < node.length && i < 64; i++) scan(node[i], depth + 1, wsPath);
+      for (var i = 0; i < node.length && i < 64; i++) scan(node[i], depth + 1, ctx);
       return;
     }
     var kind = node.type || node.kind;
     if (typeof kind === 'string') {
-      if (typeof node.workspacePath === 'string') wsPath = node.workspacePath;
+      // taskId / workspacePath 可能在外层信封上：向下递归时继承最近一次出现
+      if (typeof node.workspacePath === 'string') ctx = { ws: node.workspacePath, task: ctx.task };
+      if (typeof node.taskId === 'string' && node.taskId) ctx = { ws: ctx.ws, task: node.taskId };
       if (kind === 'usage.delta' && typeof node.outputTokens === 'number') {
         if (typeof node.modelId === 'string' && node.modelId) usage.model = node.modelId;
         usage.inputTokens += node.inputTokens | 0;
         usage.outputTokens += node.outputTokens | 0;
       } else if (TASK_KINDS[kind]) {
-        var id = node.taskId || node.sessionId;
+        var id = node.taskId || node.sessionId || (ctx && ctx.task) || node.requestId;
         if (typeof id === 'string' && id) {
           var t = Date.now();
           if (t - (recent[kind + ':' + id] || 0) > 3000) {
             recent[kind + ':' + id] = t;
-            var payload = { kind: kind, taskId: id, workspacePath: wsPath || '' };
+            var payload = { kind: kind, taskId: id, workspacePath: (ctx && ctx.ws) || '' };
             if (kind === 'task_error' || kind === 'task_warning') payload.error = String(node.error || node.warning || node.detail || '');
             if (kind === 'task_complete') {
               if (usage.model) payload.model = usage.model;
@@ -86,7 +94,7 @@ object RemoteTaskMonitor {
       }
     }
     for (var k in node) {
-      if (Object.prototype.hasOwnProperty.call(node, k)) scan(node[k], depth + 1, wsPath);
+      if (Object.prototype.hasOwnProperty.call(node, k)) scan(node[k], depth + 1, ctx);
     }
   }
   var NativeWS = window.WebSocket;
@@ -95,7 +103,7 @@ object RemoteTaskMonitor {
     ws.addEventListener('message', function (ev) {
       try {
         if (typeof ev.data !== 'string' || ev.data.length > 2000000) return;
-        scan(JSON.parse(ev.data), 0, '');
+        scan(JSON.parse(ev.data), 0, { ws: '', task: '' });
       } catch (e) {}
     });
     return ws;
@@ -141,6 +149,7 @@ object RemoteTaskMonitor {
             "task_complete" -> notify(context, mid, event)
             "task_error" -> notify(context, mid, event)
             "permission_request" -> notify(context, mid, event)
+            "elicitation_request" -> notify(context, mid, event)
             else -> Unit // task_warning 等只记日志，避免打扰
         }
     }
@@ -191,8 +200,12 @@ object RemoteTaskMonitor {
                 text = event.error?.take(120)?.trim().orEmpty().ifBlank { "远程任务执行失败" }
             }
             "permission_request" -> {
-                title = "⏸ 任务等待确认"
-                text = "有任务在等待权限确认，回去处理一下才能继续"
+                title = "⏸ 任务等待审批"
+                text = "有任务请求权限，批准后才能继续"
+            }
+            "elicitation_request" -> {
+                title = "❓ 任务等待回答"
+                text = "有任务在等你回复，回去继续对话"
             }
             else -> {
                 title = "✅ 任务完成"

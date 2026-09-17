@@ -44,13 +44,14 @@ ui/       Compose M3（设备列表 / 扫码 / 粘贴添加 / WebView 远程页�
   `v0.1.3`）；距上次检查超 24h 后冷启动静默检查一次。发现新版本弹窗确认 →
   DownloadManager 下载 → 下载完自动拉起系统安装器（首次需在系统设置允许
   本应用安装）。
-- **远程任务提醒（后台本地推送）**：远程页顶栏 🔔 开关。开启后 document-start
+- **远程任务提醒（后台本地推送）**：远程页顶栏铃铛开关。开启后 document-start
   向页面注入只读 WebSocket 观察脚本（`WebViewCompat.addDocumentStartJavaScript`），
-  深扫中继消息里的 `task_complete` / `task_error` / `permission_request` 事件与
-  `usage.delta` 的模型/token 用量，任务完成/出错/等待确认时发本地通知（通知里
-  带模型名与输出 token 数；`task_warning` 只记日志）。退后台时以前台服务
-  （`specialUse`）保活 WebView，**进程被杀则监听自然终止**；协议解析失败一律
-  静默忽略，只可能「收不到提醒」，不会影响页面本身。
+  深扫中继消息里的 `task_complete` / `task_error` / `permission_request` /
+  `elicitation_request` 事件与 `usage.delta` 的模型/token 用量，在任务**完成 /
+  出错 / 等待审批 / 等待回答**时发本地通知（完成通知带模型名与输出 token 数；
+  `task_warning` 只记日志）。退后台时以前台服务（`specialUse`）保活 WebView，
+  **进程被杀则监听自然终止**；协议解析失败一律静默忽略，只可能「收不到提醒」，
+  不会影响页面本身。
 - **WebView 诊断**：debug 下开启 `setWebContentsDebuggingEnabled(true)`，页面
   console / 加载事件写入 logcat tag `ZBoxWebView`。
 

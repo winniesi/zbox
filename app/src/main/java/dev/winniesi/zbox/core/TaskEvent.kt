@@ -9,7 +9,7 @@ import kotlinx.serialization.json.Json
  */
 @Serializable
 data class TaskEvent(
-    /** task_complete / task_error / task_warning / permission_request */
+    /** task_complete / task_error / task_warning / permission_request / elicitation_request */
     val kind: String,
     val taskId: String,
     val workspacePath: String? = null,

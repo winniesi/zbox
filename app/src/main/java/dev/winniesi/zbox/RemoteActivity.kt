@@ -25,6 +25,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
@@ -56,7 +57,7 @@ class RemoteActivity : ComponentActivity() {
     private lateinit var titleView: TextView
     private lateinit var progressBar: ProgressBar
     private lateinit var content: FrameLayout
-    private lateinit var monitorButton: TextView
+    private lateinit var monitorButton: ImageView
 
     /** 首次开启任务提醒时申请通知权限；拒绝则维持关闭。 */
     private val notifPermissionLauncher =
@@ -109,9 +110,12 @@ class RemoteActivity : ComponentActivity() {
                 loadCurrent()
             }
         }
-        monitorButton = TextView(this).apply {
-            textSize = 15f
-            setPadding(dp(12), 0, dp(12), 0)
+        monitorButton = ImageView(this).apply {
+            val p = dp(12)
+            setPadding(p, 0, p, 0)
+            background = null
+            contentDescription = "后台任务提醒开关"
+            setColorFilter(0xFFE4E2E6.toInt())
             setOnClickListener { onMonitorToggle() }
         }
         renderMonitorButton()
@@ -309,7 +313,13 @@ class RemoteActivity : ComponentActivity() {
     }
 
     private fun renderMonitorButton() {
-        monitorButton.text = if (RemoteTaskMonitor.isEnabled(this)) "🔔" else "🔕"
+        monitorButton.setImageResource(
+            if (RemoteTaskMonitor.isEnabled(this)) {
+                R.drawable.ic_notifications
+            } else {
+                R.drawable.ic_notifications_off
+            },
+        )
     }
 
     private fun onMonitorToggle() {
