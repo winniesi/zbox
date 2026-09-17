@@ -7,6 +7,7 @@ import dev.winniesi.zbox.core.DeviceRepository
 import dev.winniesi.zbox.core.DeviceStore
 import dev.winniesi.zbox.core.SecretCipher
 import dev.winniesi.zbox.platform.AndroidShortcuts
+import dev.winniesi.zbox.platform.AppUpdateManager
 import dev.winniesi.zbox.platform.DataStoreDeviceStore
 import dev.winniesi.zbox.platform.DeviceWebViewFactory
 import dev.winniesi.zbox.platform.KeystoreAesGcmCipher
@@ -34,6 +35,9 @@ class AppContainer(context: Context) {
 
     private val shortcuts = AndroidShortcuts(appContext)
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    /** GitHub Release 自更新（检查 / 下载 / 安装状态机）。 */
+    val update = AppUpdateManager(appContext, appScope)
 
     init {
         // 设备列表每次变化：同步桌面快捷方式；顺带清理已删设备的 WebView Profile

@@ -3,6 +3,12 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- 应用内自更新：下载 APK 后拉起系统安装器（首次需用户在系统设置里允许本应用安装） -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- 后台任务提醒：完成/出错/等待确认时发本地通知 + 前台服务保活 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <uses-feature
         android:name="android.hardware.camera"
@@ -17,10 +23,14 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.ZBox">
 
+        <!-- 禁用 singleTask：其重新收到启动意图会销毁栈内位于其上的
+             RemoteActivity（后台切回直接退回列表页）。singleTop 深链路由
+             等效（onNewIntent）且不破坏返回栈。 -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:launchMode="singleTask"
+            android:launchMode="singleTop"
+            android:alwaysRetainTaskState="true"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -38,8 +48,29 @@
             android:name=".RemoteActivity"
             android:exported="false" />
 
+        <!-- 远程页退到后台时保活 WebView 的 ws 连接，任务完成即发本地通知 -->
+        <service
+            android:name=".RemoteMonitorService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps the remote-control WebView session alive in background so task-completion events can raise local notifications." />
+        </service>
+
         <activity
             android:name=".ScanActivity"
             android:exported="false" />
+
+        <!-- 自更新 APK 的跨进程共享（DownloadManager 下载到 App 专属外部目录） -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 </manifest>

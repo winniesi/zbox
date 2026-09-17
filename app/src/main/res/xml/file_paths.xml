@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 自更新 APK 下载目录：getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) -->
+<paths>
+    <external-files-path
+        name="update_apks"
+        path="Download/" />
+</paths>

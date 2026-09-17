@@ -26,6 +26,8 @@ object DeviceWebViewFactory {
                 WebViewCompat.setProfile(webView, name)
             }
         }
+        // 任务监听：document-start 注入（页面脚本执行前生效，见 RemoteTaskMonitor）
+        RemoteTaskMonitor.installStartScript(webView)
         return webView
     }
 

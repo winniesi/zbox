@@ -1,11 +1,14 @@
 package dev.winniesi.zbox
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.DownloadManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.util.Log
@@ -27,10 +30,12 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
 import dev.winniesi.zbox.core.DeviceRecord
 import dev.winniesi.zbox.di.AppContainer
 import dev.winniesi.zbox.platform.DeviceWebViewFactory
+import dev.winniesi.zbox.platform.RemoteTaskMonitor
 import dev.winniesi.zbox.ui.remote.RemoteFailure
 import dev.winniesi.zbox.ui.remote.httpFailureOf
 import dev.winniesi.zbox.ui.remote.webViewErrorFailureOf
@@ -51,6 +56,18 @@ class RemoteActivity : ComponentActivity() {
     private lateinit var titleView: TextView
     private lateinit var progressBar: ProgressBar
     private lateinit var content: FrameLayout
+    private lateinit var monitorButton: TextView
+
+    /** 首次开启任务提醒时申请通知权限；拒绝则维持关闭。 */
+    private val notifPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) {
+                applyMonitorEnabled(true)
+            } else {
+                Toast.makeText(this, "未授予通知权限，无法在任务完成时提醒", Toast.LENGTH_LONG).show()
+                renderMonitorButton()
+            }
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -70,11 +87,11 @@ class RemoteActivity : ComponentActivity() {
         val bar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(8), dp(24), dp(8), dp(24))
+            setPadding(dp(8), dp(6), dp(8), dp(6))
         }
         val back = TextView(this).apply {
             text = "←"
-            textSize = 22f
+            textSize = 20f
             setPadding(dp(16), 0, dp(16), 0)
             setOnClickListener { finish() }
         }
@@ -92,8 +109,15 @@ class RemoteActivity : ComponentActivity() {
                 loadCurrent()
             }
         }
+        monitorButton = TextView(this).apply {
+            textSize = 15f
+            setPadding(dp(12), 0, dp(12), 0)
+            setOnClickListener { onMonitorToggle() }
+        }
+        renderMonitorButton()
         bar.addView(back)
         bar.addView(titleView)
+        bar.addView(monitorButton)
         bar.addView(reload)
 
         progressBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
@@ -122,6 +146,12 @@ class RemoteActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        // 回到前台：页面自己可见即可感知任务状态，停掉后台保活服务
+        RemoteMonitorService.stop(this)
+    }
+
     override fun onResume() {
         super.onResume()
         webView?.onResume()
@@ -136,8 +166,19 @@ class RemoteActivity : ComponentActivity() {
     }
 
     override fun onPause() {
-        webView?.onPause()
+        // 开启任务提醒时保持 WebView 运行（ws + 注入脚本持续收事件），否则暂停省电
+        if (!RemoteTaskMonitor.isEnabled(this)) {
+            webView?.onPause()
+        }
         super.onPause()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // 退后台且监听开启：前台服务防止进程被冻结，任务事件才能持续到达
+        if (RemoteTaskMonitor.isEnabled(this)) {
+            RemoteMonitorService.start(this)
+        }
     }
 
     override fun onDestroy() {
@@ -241,6 +282,11 @@ class RemoteActivity : ComponentActivity() {
                 return true
             }
         }
+        // 任务监听：页面里的 WebSocket 观察脚本经此桥回传事件（见 RemoteTaskMonitor）
+        web.addJavascriptInterface(
+            RemoteTaskMonitor.JsBridge(applicationContext, mid),
+            RemoteTaskMonitor.BRIDGE_NAME,
+        )
 
         web.setDownloadListener { link, userAgent, contentDisposition, mimeType, _ ->
             runCatching { enqueueDownload(this@RemoteActivity, link, userAgent, contentDisposition, mimeType) }
@@ -250,6 +296,34 @@ class RemoteActivity : ComponentActivity() {
 
     private fun showProgress() {
         progressBar.visibility = View.VISIBLE
+    }
+
+    private fun applyMonitorEnabled(enabled: Boolean) {
+        RemoteTaskMonitor.setEnabled(this, enabled)
+        renderMonitorButton()
+        Toast.makeText(
+            this,
+            if (enabled) "已开启后台任务提醒（退到后台也会通知）" else "已关闭后台任务提醒",
+            Toast.LENGTH_SHORT,
+        ).show()
+    }
+
+    private fun renderMonitorButton() {
+        monitorButton.text = if (RemoteTaskMonitor.isEnabled(this)) "🔔" else "🔕"
+    }
+
+    private fun onMonitorToggle() {
+        if (RemoteTaskMonitor.isEnabled(this)) {
+            applyMonitorEnabled(false)
+            return
+        }
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            applyMonitorEnabled(true)
+        }
     }
 
     private fun hideProgress() {

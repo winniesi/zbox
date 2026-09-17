@@ -1,5 +1,10 @@
 package dev.winniesi.zbox.ui.devices
 
+import android.Manifest
+import android.os.Build
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,11 +14,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ContentCopy
@@ -22,6 +30,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.SystemUpdateAlt
 import androidx.compose.material.icons.outlined.Laptop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -40,6 +49,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -48,13 +58,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.winniesi.zbox.core.AppRelease
 import dev.winniesi.zbox.core.DeviceRecord
 import dev.winniesi.zbox.di.LocalAppContainer
+import dev.winniesi.zbox.platform.AppUpdateManager
 
 /**
  * M1 设备列表：扫码 / 粘贴添加，点击打开 WebView 远程页，卡片上标记钥匙新鲜度。
@@ -73,14 +86,55 @@ fun DevicesScreen(
     val items by vm.items.collectAsState()
     val loaded by vm.loaded.collectAsState()
 
+    // 自更新：进列表页时若距上次检查超过 24h 则静默检查一次
+    val update = container.update
+    val updateState by update.state.collectAsState()
+    LaunchedEffect(Unit) { update.autoCheckIfDue() }
+
     var addMenuOpen by remember { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<DeviceRecord?>(null) }
     var deleteTarget by remember { mutableStateOf<DeviceRecord?>(null) }
     val clipboard = LocalClipboardManager.current
 
+    // 下载前申请通知权限（下载完成后的安装通知是主要引导路径；拒绝也不影响下载）
+    val context = LocalContext.current
+    var pendingDownload by remember { mutableStateOf<AppRelease?>(null) }
+    val notifPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) {
+        pendingDownload?.let(update::download)
+        pendingDownload = null
+    }
+
+    LaunchedEffect(updateState) {
+        when (val s = updateState) {
+            is AppUpdateManager.State.UpToDate ->
+                if (s.manual) Toast.makeText(context, "当前已是最新版本", Toast.LENGTH_SHORT).show()
+            is AppUpdateManager.State.Failed ->
+                if (s.manual) Toast.makeText(context, "检查更新失败：${s.message}", Toast.LENGTH_LONG).show()
+            is AppUpdateManager.State.Downloading ->
+                Toast.makeText(context, "开始下载更新包，完成后会提示安装", Toast.LENGTH_SHORT).show()
+            else -> Unit
+        }
+    }
+
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("ZBox 设备") })
+            TopAppBar(
+                title = { Text("ZBox 设备") },
+                actions = {
+                    if (updateState is AppUpdateManager.State.Checking) {
+                        CircularProgressIndicator(
+                            Modifier.padding(horizontal = 16.dp).size(20.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        IconButton(onClick = { update.check(manual = true) }) {
+                            Icon(Icons.Filled.SystemUpdateAlt, contentDescription = "检查更新")
+                        }
+                    }
+                },
+            )
         },
         floatingActionButton = {
             Box {
@@ -190,6 +244,66 @@ fun DevicesScreen(
             },
         )
     }
+
+    when (val s = updateState) {
+        is AppUpdateManager.State.Available -> UpdateAvailableDialog(
+            release = s.release,
+            onDismiss = {
+                if (s.manual) update.dismissAvailable() else update.ignore(s.release)
+            },
+            onDownload = {
+                if (Build.VERSION.SDK_INT >= 33) {
+                    pendingDownload = s.release
+                    notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                } else {
+                    update.download(s.release)
+                }
+            },
+        )
+
+        is AppUpdateManager.State.Downloaded -> AlertDialog(
+            onDismissRequest = { update.dismissDownloaded() },
+            title = { Text("更新已下载") },
+            text = { Text("ZBox v${s.release.version} 更新包已就绪。若安装器未自动弹出，点「立即安装」。") },
+            confirmButton = {
+                TextButton(onClick = { update.installDownloaded() }) { Text("立即安装") }
+            },
+            dismissButton = {
+                TextButton(onClick = { update.dismissDownloaded() }) { Text("稍后") }
+            },
+        )
+
+        else -> Unit
+    }
+}
+
+@Composable
+private fun UpdateAvailableDialog(
+    release: AppRelease,
+    onDismiss: () -> Unit,
+    onDownload: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("发现新版本 v${release.version}") },
+        text = {
+            Column(
+                Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState()),
+            ) {
+                Text(
+                    release.notes?.takeIf { it.isNotBlank() } ?: "暂无更新说明",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDownload) { Text("下载并安装") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("以后再说") }
+        },
+    )
 }
 
 @Composable

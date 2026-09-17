@@ -7,7 +7,7 @@ Web 远程控制页，并显示链接（临时钥匙）的生成时间。
 
 WebView 壳 + 原生设备管理层。所有与桌面端的协议通信都发生在官方网页端
 （React SPA ⇄ `wss://…/ws/remote-control/window/<token>` 中继）内，本 App 不解析、
-不重写该协议，因此 ZCode 升级不会破坏兼容性。
+不重写该协议（唯一受控例外：远程任务监听，见下），因此 ZCode 升级不会破坏兼容性。
 
 ```
 core/     纯 Kotlin 业务逻辑（可 JVM 单测，不依赖 Android）
@@ -40,6 +40,17 @@ ui/       Compose M3（设备列表 / 扫码 / 粘贴添加 / WebView 远程页�
 - **单连接限制（桌面端行为）**：同一时间只允许一个控制端接入。若官方页显示
   「已被其他设备接管 / KICKED」，关掉其他浏览器的远程页后点页面内
   「重新连接」即可；App 切换设备时会自动销毁其他设备的 WebView。
+- **应用内自更新**：列表页顶栏 ↻ 检查 GitHub Release（`winniesi/zbox`，tag 形如
+  `v0.1.3`）；距上次检查超 24h 后冷启动静默检查一次。发现新版本弹窗确认 →
+  DownloadManager 下载 → 下载完自动拉起系统安装器（首次需在系统设置允许
+  本应用安装）。
+- **远程任务提醒（后台本地推送）**：远程页顶栏 🔔 开关。开启后 document-start
+  向页面注入只读 WebSocket 观察脚本（`WebViewCompat.addDocumentStartJavaScript`），
+  深扫中继消息里的 `task_complete` / `task_error` / `permission_request` 事件与
+  `usage.delta` 的模型/token 用量，任务完成/出错/等待确认时发本地通知（通知里
+  带模型名与输出 token 数；`task_warning` 只记日志）。退后台时以前台服务
+  （`specialUse`）保活 WebView，**进程被杀则监听自然终止**；协议解析失败一律
+  静默忽略，只可能「收不到提醒」，不会影响页面本身。
 - **WebView 诊断**：debug 下开启 `setWebContentsDebuggingEnabled(true)`，页面
   console / 加载事件写入 logcat tag `ZBoxWebView`。
 
