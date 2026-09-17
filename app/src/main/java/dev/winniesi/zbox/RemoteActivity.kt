@@ -31,6 +31,7 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.addCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
 import dev.winniesi.zbox.core.DeviceRecord
@@ -75,6 +76,9 @@ class RemoteActivity : ComponentActivity() {
         container = (application as ZBoxApplication).container
         mid = intent.getStringExtra(EXTRA_MID).orEmpty()
 
+        // 返回手势 / 顶栏 ←：网页内有会话历史时先退网页历史，退无可退才离开远程页
+        onBackPressedDispatcher.addCallback(this) { navigateBack() }
+
         val density = resources.displayMetrics.density
         fun dp(v: Int) = (v * density).toInt()
 
@@ -94,7 +98,7 @@ class RemoteActivity : ComponentActivity() {
             text = "←"
             textSize = 20f
             setPadding(dp(16), 0, dp(16), 0)
-            setOnClickListener { finish() }
+            setOnClickListener { navigateBack() }
         }
         titleView = TextView(this).apply {
             setTextColor(0xFFE4E2E6.toInt())
@@ -300,6 +304,15 @@ class RemoteActivity : ComponentActivity() {
 
     private fun showProgress() {
         progressBar.visibility = View.VISIBLE
+    }
+
+    private fun navigateBack() {
+        val web = webView
+        if (web != null && web.canGoBack()) {
+            web.goBack()
+        } else {
+            finish()
+        }
     }
 
     private fun applyMonitorEnabled(enabled: Boolean) {

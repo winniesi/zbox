@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 仅 debug 变体：放行本机回环地址明文流量，供 instrumented 测试里的
+     本地 MockWebServer（HTTP + WebSocket）验证任务监听注入链路。 -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application
+        android:name=".ZBoxApplication"
+        android:networkSecurityConfig="@xml/network_security_config_debug"
+        tools:replace="android:networkSecurityConfig" />
+</manifest>

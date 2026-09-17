@@ -45,31 +45,75 @@ object RemoteTaskMonitor {
     private const val CHANNEL_EVENTS = "task_events"
     private const val DEDUP_WINDOW_MS = 60_000L
 
-    /** 注入页面的 WebSocket 观察脚本。机制见类注释；只在内存里统计，不改写任何消息。 */
+    /**
+     * 注入页面的 WebSocket 观察脚本。机制见类注释；只在内存里统计，不改写任何消息。
+     *
+     * 关键兼容点：中继消息同时存在扁平形态（{type,taskId,...}）与嵌套信封形态
+     * （{workspacePath,taskId,event:{type,...}}），taskId/workspacePath 都可能在
+     * 外层——扫描递归时向下继承最近一次出现；JSON 字符串值也尝试解析（双层信封）。
+     * ZBoxNative 桥在 document-start 时尚未保证注入完成，因此发送时惰性查找。
+     * 每条连接前 15 帧打 console 日志（logcat tag ZBoxWebView）用于诊断协议变化。
+     */
     val START_SCRIPT = """
 (function () {
   if (window.__ZBOX_TASK_MONITOR__) return;
   window.__ZBOX_TASK_MONITOR__ = true;
-  var Native = window.ZBoxNative;
-  if (!Native || !Native.postTaskEvent) return;
+  try { console.info('[ZBoxTaskMonitor] injected'); } catch (e) {}
   var TASK_KINDS = {
     task_complete: 1, task_error: 1, task_warning: 1,
     permission_request: 1, elicitation_request: 1
   };
   var recent = {};
   var usage = { model: '', inputTokens: 0, outputTokens: 0 };
-  function send(obj) { try { Native.postTaskEvent(JSON.stringify(obj)); } catch (e) {} }
+  var loggedFrames = 0;
+  // 桥对象可能晚于最早的 ws 消息注入完成：先入队，就绪后补发
+  var pending = [];
+  var flushTimer = null;
+  function flush() {
+    var n = window.ZBoxNative;
+    if (!(n && n.postTaskEvent)) {
+      if (pending.length && !flushTimer) {
+        flushTimer = setTimeout(function () { flushTimer = null; flush(); }, 500);
+        try { console.info('[ZBoxTaskMonitor] bridge not ready, queue=' + pending.length); } catch (e) {}
+      }
+      return;
+    }
+    while (pending.length) {
+      var s = pending.shift();
+      try {
+        n.postTaskEvent(s);
+        try { console.info('[ZBoxTaskMonitor] sent, left=' + pending.length); } catch (e) {}
+      } catch (e) {
+        pending.unshift(s);
+        try { console.info('[ZBoxTaskMonitor] send error: ' + e); } catch (e2) {}
+        break;
+      }
+    }
+  }
+  function send(obj) {
+    pending.push(JSON.stringify(obj));
+    if (pending.length > 50) pending.shift();
+    flush();
+  }
   function scan(node, depth, ctx) {
+    if (typeof node === 'string') {
+      if (depth < 6 && node.length > 1 && node.length < 100000 &&
+          (node.charAt(0) === '{' || node.charAt(0) === '[')) {
+        try { scan(JSON.parse(node), depth + 1, ctx); } catch (e) {}
+      }
+      return;
+    }
     if (!node || typeof node !== 'object' || depth > 6) return;
     if (Array.isArray(node)) {
       for (var i = 0; i < node.length && i < 64; i++) scan(node[i], depth + 1, ctx);
       return;
     }
+    // taskId / workspacePath 可能在外层信封上（外层节点常无 type/kind 字段）：
+    // 无条件向下递归时继承最近一次出现，内层事件才能关联到任务
+    if (typeof node.workspacePath === 'string') ctx = { ws: node.workspacePath, task: ctx.task };
+    if (typeof node.taskId === 'string' && node.taskId) ctx = { ws: ctx.ws, task: node.taskId };
     var kind = node.type || node.kind;
     if (typeof kind === 'string') {
-      // taskId / workspacePath 可能在外层信封上：向下递归时继承最近一次出现
-      if (typeof node.workspacePath === 'string') ctx = { ws: node.workspacePath, task: ctx.task };
-      if (typeof node.taskId === 'string' && node.taskId) ctx = { ws: ctx.ws, task: node.taskId };
       if (kind === 'usage.delta' && typeof node.outputTokens === 'number') {
         if (typeof node.modelId === 'string' && node.modelId) usage.model = node.modelId;
         usage.inputTokens += node.inputTokens | 0;
@@ -103,6 +147,10 @@ object RemoteTaskMonitor {
     ws.addEventListener('message', function (ev) {
       try {
         if (typeof ev.data !== 'string' || ev.data.length > 2000000) return;
+        if (loggedFrames < 15) {
+          loggedFrames++;
+          try { console.info('[ZBoxTaskMonitor] frame#' + loggedFrames + ' ' + ev.data.slice(0, 300)); } catch (e) {}
+        }
         scan(JSON.parse(ev.data), 0, { ws: '', task: '' });
       } catch (e) {}
     });
@@ -138,6 +186,7 @@ object RemoteTaskMonitor {
                 return
             }
             WebViewCompat.addDocumentStartJavaScript(webView, START_SCRIPT, setOf("*"))
+            Log.i(TAG, "document-start script installed")
         }.onFailure { Log.w(TAG, "install start script failed: ${it.message}") }
     }
 
