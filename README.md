@@ -54,12 +54,14 @@ ui/       Compose M3（设备列表 / 扫码 / 粘贴添加 / WebView 远程页�
 ./gradlew connectedDebugAndroidTest
 ```
 
-## 已知环境限制（非 App bug）
+## 已知坑（已修复，留档）
 
-在 **Android 36 模拟器（SwiftShader 软 GPU）** 上，官方远程页面（Chrome 同样）
-只渲染背景不渲染网页文字——Chromium 在该模拟器 GPU 栈上的字形光栅化伪影。
-已验证：HTTP/JS 资源全部 200、React 正常挂载、DOM 与桌面浏览器完全一致
-（可通过 `chrome://inspect` 远程调试复核）。真机 GPU 不受此影响。
+**WebView 必须原生直挂，不能放进 Compose `AndroidView`**：部分 WebView 版本
+（模拟器 133 复现、真机同症状）在 AndroidView 托管下 `vh`/`dvh` 视口单位解析为
+0（`window.innerHeight` 却正常），整页依赖 `dvh` 的官方远程页会被裁剪成黑屏。
+v0.1.2 起远程页改为原生 Activity（`RemoteActivity`）直挂 WebView；设备列表/
+扫码/添加页无 WebView，仍用 Compose。诊断手段：`chrome://inspect` + logcat
+tag `ZBoxWebView`。
 
 ## 正式签名构建
 
