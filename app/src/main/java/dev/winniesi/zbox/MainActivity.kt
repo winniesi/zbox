@@ -4,7 +4,6 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.CompositionLocalProvider
 import dev.winniesi.zbox.core.AppLinks
 import dev.winniesi.zbox.di.LocalAppContainer
@@ -16,8 +15,9 @@ class MainActivity : ComponentActivity() {
     private val container by lazy { (application as ZBoxApplication).container }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        // 注意：不要在此开启 enableEdgeToEdge —— 边到边窗口下 WebView 的
+        // vh/dvh 视口单位会解析为 0（官方远程页整页高度依赖 dvh，会导致黑屏）。
         handleIntent(intent)
         setContent {
             ZBoxTheme {

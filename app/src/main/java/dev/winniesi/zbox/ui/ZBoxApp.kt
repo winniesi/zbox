@@ -9,12 +9,12 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import dev.winniesi.zbox.RemoteActivity
 import dev.winniesi.zbox.core.AppLink
 import dev.winniesi.zbox.core.RemoteLinkParser
 import dev.winniesi.zbox.di.AppContainer
 import dev.winniesi.zbox.ui.add.AddDeviceScreen
 import dev.winniesi.zbox.ui.devices.DevicesScreen
-import dev.winniesi.zbox.ui.remote.RemoteScreen
 import dev.winniesi.zbox.ui.scan.ScanScreen
 import kotlinx.coroutines.launch
 
@@ -22,23 +22,22 @@ object NavRoutes {
     const val DEVICES = "devices"
     const val ADD = "add?prefill={prefill}"
     const val SCAN = "scan?forDevice={forDevice}"
-    const val REMOTE = "remote/{mid}"
 
     fun add(prefill: String?): String = "add?prefill=" + (prefill?.let(Uri::encode) ?: "")
     fun scan(forDevice: String?): String = "scan?forDevice=${Uri.encode(forDevice ?: "")}"
-    fun remote(mid: String): String = "remote/$mid"
 }
 
 @Composable
 fun ZBoxApp(container: AppContainer) {
     val nav = rememberNavController()
     val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     LaunchedEffect(Unit) {
         container.pendingAppLink.collect { link ->
             when (link) {
                 is AppLink.AddDevice -> nav.navigate(NavRoutes.add(link.url))
-                is AppLink.OpenDevice -> nav.navigate(NavRoutes.remote(link.mid))
+                is AppLink.OpenDevice -> context.startActivity(RemoteActivity.intent(context, link.mid))
                 null -> Unit
             }
             container.pendingAppLink.value = null
@@ -48,7 +47,7 @@ fun ZBoxApp(container: AppContainer) {
     NavHost(navController = nav, startDestination = NavRoutes.DEVICES) {
         composable(NavRoutes.DEVICES) {
             DevicesScreen(
-                onOpenDevice = { nav.navigate(NavRoutes.remote(it)) },
+                onOpenDevice = { context.startActivity(RemoteActivity.intent(context, it)) },
                 onScan = { nav.navigate(NavRoutes.scan(null)) },
                 onPaste = { nav.navigate(NavRoutes.add(null)) },
                 onRescanDevice = { nav.navigate(NavRoutes.scan(it)) },
@@ -95,17 +94,6 @@ fun ZBoxApp(container: AppContainer) {
                         scope = scope,
                     )
                 },
-            )
-        }
-
-        composable(
-            NavRoutes.REMOTE,
-            arguments = listOf(navArgument("mid") { type = NavType.StringType }),
-        ) { entry ->
-            RemoteScreen(
-                mid = entry.arguments?.getString("mid").orEmpty(),
-                onRescan = { nav.navigate(NavRoutes.scan(it)) },
-                onBack = { nav.popBackStack() },
             )
         }
     }

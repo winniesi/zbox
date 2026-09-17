@@ -6,11 +6,14 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
+import androidx.test.runner.lifecycle.Stage
 import dev.winniesi.zbox.core.AppLinks
 import dev.winniesi.zbox.core.RemoteLink
 import dev.winniesi.zbox.di.AppContainer
 import kotlinx.coroutines.runBlocking
 import org.junit.After
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -78,9 +81,21 @@ class MainActivityUiTest {
         composeRule.activityRule.scenario.onActivity { activity ->
             (activity as MainActivity).consumeDeepLink(AppLinks.buildOpenUrl(fakeLink.mid))
         }
-        composeRule.waitUntil(10_000) {
-            composeRule.onAllNodesWithText("E2E设备").fetchSemanticsNodes().isNotEmpty()
+        // 远程页是独立 Activity（原生 View 层级），验证其进入 Resumed 状态
+        composeRule.waitUntil(10_000) { remoteResumed() }
+        assertTrue(remoteResumed())
+    }
+
+    private fun remoteResumed(): Boolean {
+        val found = java.util.concurrent.atomic.AtomicBoolean(false)
+        val instrumentation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
+        instrumentation.runOnMainSync {
+            found.set(
+                ActivityLifecycleMonitorRegistry.getInstance()
+                    .getActivitiesInStage(Stage.RESUMED)
+                    .any { it is RemoteActivity },
+            )
         }
-        composeRule.onNodeWithText("E2E设备").assertIsDisplayed()
+        return found.get()
     }
 }

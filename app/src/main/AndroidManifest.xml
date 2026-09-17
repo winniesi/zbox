@@ -33,5 +33,13 @@
                 <data android:scheme="zcode" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".RemoteActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".ScanActivity"
+            android:exported="false" />
     </application>
 </manifest>
