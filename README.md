@@ -42,10 +42,10 @@ ui/       Compose M3（设备列表 / 扫码 / 粘贴添加 / WebView 远程页�
 - **单连接限制（桌面端行为）**：同一时间只允许一个控制端接入。若官方页显示
   「已被其他设备接管 / KICKED」，关掉其他浏览器的远程页后点页面内
   「重新连接」即可；App 切换设备时会自动销毁其他设备的 WebView。
-- **应用内自更新**：列表页顶栏 ↻ 检查 GitHub Release（`winniesi/zbox`，tag 形如
+- **应用内检查更新**：列表页顶栏 ↻ 检查 GitHub Release（`winniesi/zbox`，tag 形如
   `v0.1.3`）；距上次检查超 24h 后冷启动静默检查一次。发现新版本弹窗确认 →
-  DownloadManager 下载 → 下载完自动拉起系统安装器（首次需在系统设置允许
-  本应用安装）。
+  跳转浏览器到 GitHub Release 页手动下载安装（不做应用内下载：DownloadManager
+  直连 GitHub 资产在部分网络不可用，浏览器交给用户自己的下载手段）。
 - **远程任务提醒（后台本地推送）**：远程页顶栏铃铛开关。开启后 document-start
   向页面注入只读 WebSocket 观察脚本（`WebViewCompat.addDocumentStartJavaScript`），
   深扫中继消息里的 `task_complete` / `task_error` / `permission_request` /

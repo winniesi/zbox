@@ -3,9 +3,7 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
-    <!-- 应用内自更新：下载 APK 后拉起系统安装器（首次需用户在系统设置里允许本应用安装） -->
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
-    <!-- 后台任务提醒：完成/出错/等待确认时发本地通知 + 前台服务保活 -->
+    <!-- 后台任务提醒：完成/出错/等待审批/等待回答时发本地通知 + 前台服务保活 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
@@ -61,16 +59,5 @@
         <activity
             android:name=".ScanActivity"
             android:exported="false" />
-
-        <!-- 自更新 APK 的跨进程共享（DownloadManager 下载到 App 专属外部目录） -->
-        <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.fileprovider"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_paths" />
-        </provider>
     </application>
 </manifest>

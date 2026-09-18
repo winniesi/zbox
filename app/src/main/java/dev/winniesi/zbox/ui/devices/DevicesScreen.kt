@@ -1,10 +1,6 @@
 package dev.winniesi.zbox.ui.devices
 
-import android.Manifest
-import android.os.Build
 import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -96,24 +92,13 @@ fun DevicesScreen(
     var deleteTarget by remember { mutableStateOf<DeviceRecord?>(null) }
     val clipboard = LocalClipboardManager.current
 
-    // 下载前申请通知权限（下载完成后的安装通知是主要引导路径；拒绝也不影响下载）
     val context = LocalContext.current
-    var pendingDownload by remember { mutableStateOf<AppRelease?>(null) }
-    val notifPermission = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) {
-        pendingDownload?.let(update::download)
-        pendingDownload = null
-    }
-
     LaunchedEffect(updateState) {
         when (val s = updateState) {
             is AppUpdateManager.State.UpToDate ->
                 if (s.manual) Toast.makeText(context, "当前已是最新版本", Toast.LENGTH_SHORT).show()
             is AppUpdateManager.State.Failed ->
                 if (s.manual) Toast.makeText(context, "检查更新失败：${s.message}", Toast.LENGTH_LONG).show()
-            is AppUpdateManager.State.Downloading ->
-                Toast.makeText(context, "开始下载更新包，完成后会提示安装", Toast.LENGTH_SHORT).show()
             else -> Unit
         }
     }
@@ -251,26 +236,7 @@ fun DevicesScreen(
             onDismiss = {
                 if (s.manual) update.dismissAvailable() else update.ignore(s.release)
             },
-            onDownload = {
-                if (Build.VERSION.SDK_INT >= 33) {
-                    pendingDownload = s.release
-                    notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                } else {
-                    update.download(s.release)
-                }
-            },
-        )
-
-        is AppUpdateManager.State.Downloaded -> AlertDialog(
-            onDismissRequest = { update.dismissDownloaded() },
-            title = { Text("更新已下载") },
-            text = { Text("ZBox v${s.release.version} 更新包已就绪。若安装器未自动弹出，点「立即安装」。") },
-            confirmButton = {
-                TextButton(onClick = { update.installDownloaded() }) { Text("立即安装") }
-            },
-            dismissButton = {
-                TextButton(onClick = { update.dismissDownloaded() }) { Text("稍后") }
-            },
+            onOpenGitHub = { update.openReleasePage(s.release) },
         )
 
         else -> Unit
@@ -281,7 +247,7 @@ fun DevicesScreen(
 private fun UpdateAvailableDialog(
     release: AppRelease,
     onDismiss: () -> Unit,
-    onDownload: () -> Unit,
+    onOpenGitHub: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -295,10 +261,16 @@ private fun UpdateAvailableDialog(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "将在浏览器打开 GitHub Release 页，下载 APK 后手动安装。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         },
         confirmButton = {
-            TextButton(onClick = onDownload) { Text("下载并安装") }
+            TextButton(onClick = onOpenGitHub) { Text("去 GitHub 下载") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("以后再说") }
